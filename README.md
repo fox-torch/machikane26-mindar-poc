@@ -1,36 +1,58 @@
 # machikane26-mindar-poc
 
-まちかね祭2026 AR班の **MindAR.js 技術検証専用PoC**。既存 `murozono-aiki/ar-demo` とは別リポジトリで、参考マーカーのみ検証用に使用する。
+MindAR.js と Three.js を使った、ブラウザ上で動作する画像マーカー認識の検証プログラムです。
 
-## 今回の担当で確認すること
-- 画像マーカーの検出精度・安定性（found/lost回数、連続ロック時間）
-- 複数画像ターゲットの識別
-- マーカーと端末カメラの相対位置・姿勢を取得できるか
-- 床観測孔 / フィルターカード / 窓ポスターへ展開できるか
-- iOS/Androidのブラウザ差
+複数の画像ターゲットを認識し、各ターゲットの検出状態、カメラとの相対位置・姿勢、距離の概算値を画面上に表示できます。また、認識結果をCSVとして保存できます。
+
+## 主な機能
+
+- 複数画像ターゲットの個別認識
+- `onTargetFound` / `onTargetLost` による検出・消失の記録
+- カメラに対する相対位置 `x / y / z` の取得
+- 相対回転角 `Y / X / Z` の取得
+- ターゲット幅を基準とした相対距離の取得
+- 実際のマーカー幅を入力した場合の概算距離表示
+- 複数ターゲット同時追跡
+- 認識・姿勢データのCSV保存
+- 画像ターゲットごとの簡易状態マッピング
 
 ## 技術構成
-Vite + Vanilla TypeScript + MindAR.js + Three.js。MindAR anchor の `THREE.Group` からカメラ相対の変換行列を計算し、xyz・回転・距離をHUDに表示する。
 
-**注意:** MindARの座標は画像ターゲット幅を1とする正規化空間として扱う。実距離そのものではない。印刷したマーカー幅(mm)を入力すると `distance × markerWidth` の概算値を表示するが、採用前に実測比較して誤差評価する。
+- Vite
+- Vanilla TypeScript
+- MindAR.js
+- Three.js
 
-## 実機テスト
-1. `npm run dev -- --host 127.0.0.1`
-2. PC上でTailscale HTTPS公開
-3. スマホも同じTailnetへ接続しHTTPS URLを開く
-4. カメラ許可 → `AR開始`
-5. 参考マーカーを距離・角度・照度を変えて認識させる
-6. `CSV保存` でログを回収
-### 最低限の試験マトリクス
-各マーカーで正面 20/40/60/100cm、左右30°/45°、暗所/通常/逆光、部分遮蔽25%を各3回。found/lostと連続ロック時間を記録する。
+MindAR.js の画像ターゲットを `addAnchor(index)` でThree.jsのアンカーへ対応付け、アンカーとカメラの変換行列から相対位置・回転を算出しています。
 
-## 参考データ
-`public/reference/` は `murozono-aiki/ar-demo` の4画像と既生成 `ar-images.mind` を技術比較のために使用。最終マーカーは本企画用に別途生成する。
+距離は画像ターゲット幅を基準とした正規化値です。マーカーの実幅を入力すると、その値を使って概算mmへ変換します。
 
-## 依存導入メモ
-彗のPCは Node 24.18.0。`mind-ar@1.2.5` の間接依存 `canvas@2.11.2` はNode 24 Windows向けprebuiltがなく通常installが失敗したため、PoCでは `npm install --ignore-scripts` でブラウザ用依存を導入した。ブラウザ実行に不要なネイティブcanvasのinstall script回避であり、最終採用時はNode LTS固定などを検討する。
-## 現在のTailnet検証URL
-- AR PoC: `https://pc.tail260870.ts.net/`
-- 参考マーカー表示: `https://pc.tail260870.ts.net/markers.html`
+## 起動
 
-参考マーカー0〜2はFilter処理経路の実証用に BLUE / RED / GREEN へ仮マッピングしている。認識すると `currentFilter` を更新し、マーカーを外しても保持する。本番Filterカードの画像が確定したら `.mind` を差し替えて同じ試験を再実施する。
+```bash
+npm install
+npm run dev
+```
+
+ブラウザで表示されたURLを開き、カメラアクセスを許可して `AR開始` を押します。
+
+## CSV出力
+
+`CSV保存` を押すと、認識ログをCSVとして保存します。主な列は以下です。
+
+- timestamp
+- event
+- target
+- current_filter
+- x / y / z
+- distance_target_width
+- estimated_mm
+- rotation_y_deg / rotation_x_deg / rotation_z_deg
+
+## ビルド
+
+```bash
+npm run build
+```
+
+`dist/` に静的ファイルが生成されます。
