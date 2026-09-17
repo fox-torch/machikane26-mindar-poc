@@ -29,3 +29,8 @@ Vite + Vanilla TypeScript + MindAR.js + Three.js。MindAR anchor の `THREE.Grou
 
 ## 依存導入メモ
 彗のPCは Node 24.18.0。`mind-ar@1.2.5` の間接依存 `canvas@2.11.2` はNode 24 Windows向けprebuiltがなく通常installが失敗したため、PoCでは `npm install --ignore-scripts` でブラウザ用依存を導入した。ブラウザ実行に不要なネイティブcanvasのinstall script回避であり、最終採用時はNode LTS固定などを検討する。
+## 現在のTailnet検証URL
+- AR PoC: `https://pc.tail260870.ts.net/`
+- 参考マーカー表示: `https://pc.tail260870.ts.net/markers.html`
+
+参考マーカー0〜2はFilter処理経路の実証用に BLUE / RED / GREEN へ仮マッピングしている。認識すると `currentFilter` を更新し、マーカーを外しても保持する。本番Filterカードの画像が確定したら `.mind` を差し替えて同じ試験を再実施する。

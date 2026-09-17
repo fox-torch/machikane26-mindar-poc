@@ -12,13 +12,18 @@
       <div class="panel">
         <h1>MindAR.js 検証PoC</h1>
         <div class="controls">
-          <button id="start">AR開始</button><button id="stop" disabled>停止</button><button id="download">CSV保存</button>
+          <button id="start">AR開始</button>
+          <button id="stop" disabled>停止</button>
+          <button id="download">CSV保存</button>
+          <button id="clear-filter">Filter解除</button>
         </div>
         <label>印刷マーカー幅(mm) <input id="marker-width" type="number" min="1" step="1" placeholder="例: 120" /></label>
         <p id="status">待機中</p>
+        <p id="current-filter">currentFilter: null</p>
         <div id="targets"></div>
         <pre id="pose">target: -</pre>
-        <small>距離はMindARのtarget-width単位。マーカー幅入力時のみ概算mmも表示。</small>
+        <small>target 0〜2はFilter判定経路を試すための仮マッピング。最終カードの精度評価ではありません。</small>        <small>距離はtarget-width単位。マーカー幅入力時のみ概算mmも表示。</small>
+        <small><a href="/markers.html" target="_blank" rel="noreferrer">参考マーカー表示ページ</a></small>
       </div>
     </aside>
   </div>

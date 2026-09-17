@@ -2,27 +2,49 @@ import * as THREE from 'three';
 import { MindARThree } from 'mind-ar/dist/mindar-image-three.prod.js';
 import './style.css';
 
-type LogRow = { t: number; event: string; target: number; x?: number; y?: number; z?: number; distance?: number; estimatedMm?: number };
-const targetNames = ['reference-1', 'reference-2', 'reference-3', 'reference-4'];
+type LogRow = {
+  t: number;
+  event: string;
+  target: number;
+  filter?: string;
+  x?: number;
+  y?: number;
+  z?: number;
+  distance?: number;
+  estimatedMm?: number;
+};
+
+type TargetDefinition = { name: string; demoRole: string; filter: string | null };
+const targets: TargetDefinition[] = [
+  { name: 'reference-1', demoRole: 'FILTER BLUE (demo)', filter: 'BLUE' },
+  { name: 'reference-2', demoRole: 'FILTER RED (demo)', filter: 'RED' },
+  { name: 'reference-3', demoRole: 'FILTER GREEN (demo)', filter: 'GREEN' },
+  { name: 'reference-4', demoRole: 'OBSERVATION SAMPLE', filter: null },
+];
+
 const container = document.querySelector<HTMLElement>('#ar-container')!;
-const statusEl = document.querySelector<HTMLElement>('#status')!;
-const poseEl = document.querySelector<HTMLElement>('#pose')!;
+const statusEl = document.querySelector<HTMLElement>('#status')!;const poseEl = document.querySelector<HTMLElement>('#pose')!;
 const targetsEl = document.querySelector<HTMLElement>('#targets')!;
+const filterEl = document.querySelector<HTMLElement>('#current-filter')!;
 const startButton = document.querySelector<HTMLButtonElement>('#start')!;
 const stopButton = document.querySelector<HTMLButtonElement>('#stop')!;
 const downloadButton = document.querySelector<HTMLButtonElement>('#download')!;
+const clearFilterButton = document.querySelector<HTMLButtonElement>('#clear-filter')!;
 const widthInput = document.querySelector<HTMLInputElement>('#marker-width')!;
 
 const logs: LogRow[] = [];
 const foundAt = new Map<number, number>();
-const counts = targetNames.map(() => ({ found: 0, lost: 0 }));
-const chips = targetNames.map((name, i) => {
+const counts = targets.map(() => ({ found: 0, lost: 0 }));
+let currentFilter: string | null = null;
+
+const chips = targets.map((target, i) => {
   const el = document.createElement('span');
   el.className = 'chip';
-  el.textContent = `${i}: ${name}`;
+  el.textContent = `${i}: ${target.demoRole}`;
   targetsEl.appendChild(el);
   return el;
 });
+
 const mindar = new MindARThree({
   container,
   imageTargetSrc: '/reference/ar-images.mind',
@@ -30,11 +52,11 @@ const mindar = new MindARThree({
   uiLoading: 'yes',
   uiScanning: 'yes',
   uiError: 'yes',
-});
-const { renderer, scene, camera } = mindar;
-const anchors = targetNames.map((_, i) => mindar.addAnchor(i));
+});const { renderer, scene, camera } = mindar;
+const anchors = targets.map((_, i) => mindar.addAnchor(i));
 
 anchors.forEach((anchor, i) => {
+  const target = targets[i];
   const color = new THREE.Color().setHSL(i / anchors.length, 0.8, 0.55);
   const plane = new THREE.Mesh(
     new THREE.PlaneGeometry(1, 0.12),
@@ -47,16 +69,27 @@ anchors.forEach((anchor, i) => {
     counts[i].found++;
     foundAt.set(i, performance.now());
     chips[i].classList.add('active');
-    statusEl.textContent = `検出: ${i} ${targetNames[i]}`;
-    logs.push({ t: Date.now(), event: 'found', target: i });
+    statusEl.textContent = `検出: ${i} ${target.demoRole}`;
+    if (target.filter) {
+      currentFilter = target.filter;
+      filterEl.textContent = `currentFilter: ${currentFilter}`;
+      logs.push({ t: Date.now(), event: 'filter_changed', target: i, filter: currentFilter });
+    }
+    logs.push({ t: Date.now(), event: 'found', target: i, filter: currentFilter ?? undefined });
   };
+
   anchor.onTargetLost = () => {
     counts[i].lost++;
     foundAt.delete(i);
-    chips[i].classList.remove('active');
-    statusEl.textContent = `消失: ${i} ${targetNames[i]}`;
-    logs.push({ t: Date.now(), event: 'lost', target: i });
+    chips[i].classList.remove('active');    statusEl.textContent = `消失: ${i} ${target.demoRole}`;
+    logs.push({ t: Date.now(), event: 'lost', target: i, filter: currentFilter ?? undefined });
   };
+});
+
+clearFilterButton.addEventListener('click', () => {
+  currentFilter = null;
+  filterEl.textContent = 'currentFilter: null';
+  logs.push({ t: Date.now(), event: 'filter_cleared', target: -1 });
 });
 
 const markerWorld = new THREE.Vector3();
@@ -66,15 +99,18 @@ const relativePos = new THREE.Vector3();
 const relativeQuat = new THREE.Quaternion();
 const relativeScale = new THREE.Vector3();
 const euler = new THREE.Euler();
+let lastSampleAt = 0;
 
 function updateDiagnostics() {
   const activeIndex = anchors.findIndex((anchor) => anchor.group.visible);
   if (activeIndex < 0) {
-    poseEl.textContent = targetNames.map((n, i) => `${i} ${n}: found=${counts[i].found} lost=${counts[i].lost}`).join('\n');
+    poseEl.textContent = [
+      `currentFilter: ${currentFilter ?? 'null'}`,
+      ...targets.map((n, i) => `${i} ${n.name}: found=${counts[i].found} lost=${counts[i].lost}`),
+    ].join('\n');
     return;
   }
-  const anchor = anchors[activeIndex];
-  anchor.group.updateWorldMatrix(true, false);
+  const anchor = anchors[activeIndex];  anchor.group.updateWorldMatrix(true, false);
   camera.updateWorldMatrix(true, false);
   anchor.group.getWorldPosition(markerWorld);
   camera.getWorldPosition(cameraWorld);
@@ -84,10 +120,14 @@ function updateDiagnostics() {
   euler.setFromQuaternion(relativeQuat, 'YXZ');
 
   const markerWidthMm = Number(widthInput.value);
-  const estimatedMm = Number.isFinite(markerWidthMm) && markerWidthMm > 0 ? distance * markerWidthMm : undefined;
+  const estimatedMm = Number.isFinite(markerWidthMm) && markerWidthMm > 0
+    ? distance * markerWidthMm
+    : undefined;
   const lockMs = foundAt.has(activeIndex) ? performance.now() - foundAt.get(activeIndex)! : 0;
   poseEl.textContent = [
-    `target: ${activeIndex} ${targetNames[activeIndex]}`,
+    `target: ${activeIndex} ${targets[activeIndex].name}`,
+    `role: ${targets[activeIndex].demoRole}`,
+    `currentFilter: ${currentFilter ?? 'null'}`,
     `relative xyz: ${relativePos.x.toFixed(3)}, ${relativePos.y.toFixed(3)}, ${relativePos.z.toFixed(3)}`,
     `distance: ${distance.toFixed(3)} target-width`,
     estimatedMm ? `distance approx: ${estimatedMm.toFixed(0)} mm` : 'distance approx: marker width未入力',
@@ -96,10 +136,22 @@ function updateDiagnostics() {
     `found/lost: ${counts[activeIndex].found}/${counts[activeIndex].lost}`,
   ].join('\n');
 
-  if (logs.length === 0 || performance.now() % 500 < 20) {
-    logs.push({ t: Date.now(), event: 'sample', target: activeIndex, x: relativePos.x, y: relativePos.y, z: relativePos.z, distance, estimatedMm });
+  const now = performance.now();
+  if (now - lastSampleAt >= 500) {
+    lastSampleAt = now;    logs.push({
+      t: Date.now(),
+      event: 'sample',
+      target: activeIndex,
+      filter: currentFilter ?? undefined,
+      x: relativePos.x,
+      y: relativePos.y,
+      z: relativePos.z,
+      distance,
+      estimatedMm,
+    });
   }
 }
+
 let running = false;
 startButton.addEventListener('click', async () => {
   if (running) return;
@@ -114,8 +166,7 @@ startButton.addEventListener('click', async () => {
       renderer.render(scene, camera);
     });
     statusEl.textContent = 'スキャン中';
-  } catch (error) {
-    console.error(error);
+  } catch (error) {    console.error(error);
     statusEl.textContent = `起動失敗: ${error instanceof Error ? error.message : String(error)}`;
   }
 });
@@ -129,10 +180,11 @@ stopButton.addEventListener('click', () => {
   stopButton.disabled = true;
   statusEl.textContent = '停止';
 });
+
 downloadButton.addEventListener('click', () => {
-  const header = 'timestamp,event,target,x,y,z,distance_target_width,estimated_mm\n';
-  const rows = logs.map(r => [
-    r.t, r.event, r.target, r.x ?? '', r.y ?? '', r.z ?? '', r.distance ?? '', r.estimatedMm ?? ''
+  const header = 'timestamp,event,target,current_filter,x,y,z,distance_target_width,estimated_mm\n';
+  const rows = logs.map((r) => [
+    r.t, r.event, r.target, r.filter ?? '', r.x ?? '', r.y ?? '', r.z ?? '', r.distance ?? '', r.estimatedMm ?? '',
   ].join(',')).join('\n');
   const url = URL.createObjectURL(new Blob([header + rows], { type: 'text/csv' }));
   const a = document.createElement('a');

@@ -14,4 +14,5 @@ input { width: 90px; }
 .chip { padding: 4px 8px; border-radius: 999px; background: #444; font-size: 12px; }
 .chip.active { background: #137333; }
 #pose { font-size: 12px; white-space: pre-wrap; margin: 8px 0; max-height: 32vh; overflow: auto; }
-small { opacity: .8; line-height: 1.3; display: block; }
+small { opacity: .8; line-height: 1.3; display: block; }#current-filter { font-weight: 700; margin: 6px 0; }
+a { color: #8ab4f8; }
