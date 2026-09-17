@@ -23,7 +23,8 @@ const targets: TargetDefinition[] = [
 ];
 
 const container = document.querySelector<HTMLElement>('#ar-container')!;
-const statusEl = document.querySelector<HTMLElement>('#status')!;const poseEl = document.querySelector<HTMLElement>('#pose')!;
+const statusEl = document.querySelector<HTMLElement>('#status')!;
+const poseEl = document.querySelector<HTMLElement>('#pose')!;
 const targetsEl = document.querySelector<HTMLElement>('#targets')!;
 const filterEl = document.querySelector<HTMLElement>('#current-filter')!;
 const startButton = document.querySelector<HTMLButtonElement>('#start')!;
@@ -52,7 +53,8 @@ const mindar = new MindARThree({
   uiLoading: 'yes',
   uiScanning: 'yes',
   uiError: 'yes',
-});const { renderer, scene, camera } = mindar;
+});
+const { renderer, scene, camera } = mindar;
 const anchors = targets.map((_, i) => mindar.addAnchor(i));
 
 anchors.forEach((anchor, i) => {
@@ -81,7 +83,8 @@ anchors.forEach((anchor, i) => {
   anchor.onTargetLost = () => {
     counts[i].lost++;
     foundAt.delete(i);
-    chips[i].classList.remove('active');    statusEl.textContent = `消失: ${i} ${target.demoRole}`;
+    chips[i].classList.remove('active');
+    statusEl.textContent = `消失: ${i} ${target.demoRole}`;
     logs.push({ t: Date.now(), event: 'lost', target: i, filter: currentFilter ?? undefined });
   };
 });
@@ -110,27 +113,39 @@ function updateDiagnostics() {
     ].join('\n');
     return;
   }
-  const anchor = anchors[activeIndex];  anchor.group.updateWorldMatrix(true, false);
+  const anchor = anchors[activeIndex];
+  anchor.group.updateWorldMatrix(true, false);
   camera.updateWorldMatrix(true, false);
   anchor.group.getWorldPosition(markerWorld);
   camera.getWorldPosition(cameraWorld);
-  const distance = markerWorld.distanceTo(cameraWorld);
+  const rawDistance = markerWorld.distanceTo(cameraWorld);
   relative.copy(camera.matrixWorld).invert().multiply(anchor.group.matrixWorld);
   relative.decompose(relativePos, relativeQuat, relativeScale);
   euler.setFromQuaternion(relativeQuat, 'YXZ');
 
+  const targetDimensions = (mindar as any).controller?.markerDimensions?.[activeIndex] as
+    | [number, number]
+    | undefined;
+  const targetPixelWidth = targetDimensions?.[0];
+  const hasTargetScale = Number.isFinite(targetPixelWidth) && targetPixelWidth! > 0;
+  const x = hasTargetScale ? relativePos.x / targetPixelWidth! : relativePos.x;
+  const y = hasTargetScale ? relativePos.y / targetPixelWidth! : relativePos.y;
+  const z = hasTargetScale ? relativePos.z / targetPixelWidth! : relativePos.z;
+  const distance = hasTargetScale ? rawDistance / targetPixelWidth! : rawDistance;
+
   const markerWidthMm = Number(widthInput.value);
-  const estimatedMm = Number.isFinite(markerWidthMm) && markerWidthMm > 0
+  const estimatedMm = hasTargetScale && Number.isFinite(markerWidthMm) && markerWidthMm > 0
     ? distance * markerWidthMm
     : undefined;
   const lockMs = foundAt.has(activeIndex) ? performance.now() - foundAt.get(activeIndex)! : 0;
+
   poseEl.textContent = [
     `target: ${activeIndex} ${targets[activeIndex].name}`,
     `role: ${targets[activeIndex].demoRole}`,
     `currentFilter: ${currentFilter ?? 'null'}`,
-    `relative xyz: ${relativePos.x.toFixed(3)}, ${relativePos.y.toFixed(3)}, ${relativePos.z.toFixed(3)}`,
-    `distance: ${distance.toFixed(3)} target-width`,
-    estimatedMm ? `distance approx: ${estimatedMm.toFixed(0)} mm` : 'distance approx: marker width未入力',
+    `relative xyz: ${x.toFixed(3)}, ${y.toFixed(3)}, ${z.toFixed(3)} ${hasTargetScale ? 'target-width' : 'raw'}`,
+    `distance: ${distance.toFixed(3)} ${hasTargetScale ? 'target-width' : 'raw'}`,
+    estimatedMm ? `distance approx: ${estimatedMm.toFixed(0)} mm` : 'distance approx: marker width未入力 / scale未取得',
     `rotation deg Y/X/Z: ${THREE.MathUtils.radToDeg(euler.y).toFixed(1)}, ${THREE.MathUtils.radToDeg(euler.x).toFixed(1)}, ${THREE.MathUtils.radToDeg(euler.z).toFixed(1)}`,
     `continuous lock: ${(lockMs / 1000).toFixed(1)} s`,
     `found/lost: ${counts[activeIndex].found}/${counts[activeIndex].lost}`,
@@ -138,14 +153,15 @@ function updateDiagnostics() {
 
   const now = performance.now();
   if (now - lastSampleAt >= 500) {
-    lastSampleAt = now;    logs.push({
+    lastSampleAt = now;
+    logs.push({
       t: Date.now(),
       event: 'sample',
       target: activeIndex,
       filter: currentFilter ?? undefined,
-      x: relativePos.x,
-      y: relativePos.y,
-      z: relativePos.z,
+      x,
+      y,
+      z,
       distance,
       estimatedMm,
     });
@@ -166,7 +182,8 @@ startButton.addEventListener('click', async () => {
       renderer.render(scene, camera);
     });
     statusEl.textContent = 'スキャン中';
-  } catch (error) {    console.error(error);
+  } catch (error) {
+    console.error(error);
     statusEl.textContent = `起動失敗: ${error instanceof Error ? error.message : String(error)}`;
   }
 });
