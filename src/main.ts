@@ -12,6 +12,9 @@ type LogRow = {
   z?: number;
   distance?: number;
   estimatedMm?: number;
+  rotationY?: number;
+  rotationX?: number;
+  rotationZ?: number;
 };
 
 type TargetDefinition = { name: string; demoRole: string; filter: string | null };
@@ -183,6 +186,9 @@ function updateDiagnostics() {
         z,
         distance,
         estimatedMm,
+        rotationY: THREE.MathUtils.radToDeg(euler.y),
+        rotationX: THREE.MathUtils.radToDeg(euler.x),
+        rotationZ: THREE.MathUtils.radToDeg(euler.z),
       });
     }
   }
@@ -241,9 +247,10 @@ stopButton.addEventListener('click', () => {
 });
 
 downloadButton.addEventListener('click', () => {
-  const header = 'timestamp,event,target,current_filter,x,y,z,distance_target_width,estimated_mm\n';
+  const header = 'timestamp,event,target,current_filter,x,y,z,distance_target_width,estimated_mm,rotation_y_deg,rotation_x_deg,rotation_z_deg\n';
   const rows = logs.map((r) => [
     r.t, r.event, r.target, r.filter ?? '', r.x ?? '', r.y ?? '', r.z ?? '', r.distance ?? '', r.estimatedMm ?? '',
+    r.rotationY ?? '', r.rotationX ?? '', r.rotationZ ?? '',
   ].join(',')).join('\n');
   const url = URL.createObjectURL(new Blob([header + rows], { type: 'text/csv' }));
   const a = document.createElement('a');
